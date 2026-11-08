@@ -1,0 +1,37 @@
+{
+  "name": "devconnect",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DevConnect: a developer social & portfolio platform (Next.js + Express + PostgreSQL)",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @devconnect/api --filter @devconnect/web dev",
+    "dev:api": "pnpm --filter @devconnect/api dev",
+    "dev:web": "pnpm --filter @devconnect/web dev",
+    "build": "pnpm --recursive build",
+    "start:api": "pnpm --filter @devconnect/api start",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "infra:up": "docker compose up --detach --wait",
+    "infra:down": "docker compose down",
+    "infra:reset": "docker compose down --volumes",
+    "infra:logs": "docker compose logs --follow"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.4.3",
+    "globals": "^16.5.0",
+    "prettier": "^3.9.9",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.71.1"
+  }
+}

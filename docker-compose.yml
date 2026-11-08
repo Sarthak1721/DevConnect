@@ -1,0 +1,46 @@
+# Local development infrastructure: PostgreSQL + Redis.
+# The apps themselves (api, web) run directly on your machine for fast hot reload.
+#
+#   pnpm infra:up      start both services and wait until they are healthy
+#   pnpm infra:down    stop them (data is kept)
+#   pnpm infra:reset   stop them AND delete the database volume (fresh start)
+name: devconnect
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      # Local-only credentials. Production uses a managed database with real secrets.
+      POSTGRES_USER: devconnect
+      POSTGRES_PASSWORD: devconnect
+      POSTGRES_DB: devconnect
+    ports:
+      # Bound to 127.0.0.1 so the database is reachable from your machine only, not your Wi-Fi network.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # Postgres 18+ stores data in /var/lib/postgresql/<major>/docker, so the volume mounts the parent folder.
+      - postgres-data:/var/lib/postgresql
+      # SQL files in this folder run once: the first time the container starts with an empty volume.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U devconnect -d devconnect']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # Used as a cache (rate-limit counters, locks), so no persistence: no snapshots, no append-only file.
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

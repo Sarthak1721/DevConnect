@@ -1,0 +1,14 @@
+# Store text files with LF line endings and check them out as LF on every OS (Windows included).
+# Without this, Git on Windows may convert to CRLF, which breaks shell scripts in Docker
+# and makes every line show up as "changed".
+* text=auto eol=lf
+
+# Binary files: never convert
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary

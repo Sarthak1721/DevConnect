@@ -1,0 +1,33 @@
+# pnpm workspace: which folders are packages, plus repo-wide pnpm settings.
+# (Since pnpm 11, settings live here, not in package.json or .npmrc.)
+
+packages:
+  - apps/*
+  - packages/*
+
+# One place for versions used by more than one package.
+# A package.json entry of "catalog:" means "use the version listed here".
+catalog:
+  '@types/node': ^24.19.1
+  typescript: ~6.0.3 # typescript-eslint's type-aware rules support TypeScript < 6.1 (see docs/adr/0007)
+  vitest: ^5.0.3
+  zod: ^4.6.7
+
+# Supply-chain safety: a dependency may run install scripts only if it is allowed here.
+# These three ship prebuilt binaries through optional dependencies, so their scripts aren't needed.
+allowBuilds:
+  esbuild: false
+  sharp: false
+  unrs-resolver: false
+
+# Don't install versions published less than 24 hours ago (pnpm's default, stated explicitly).
+# Most malicious releases are caught and pulled within hours.
+minimumReleaseAge: 1440
+
+# Advisories reviewed and accepted (reasoning in docs/adr/0008). Everything else fails `pnpm audit`.
+auditConfig:
+  ignoreGhsas:
+    # minimatch < 11.0.1: denial of service through crafted glob patterns. Only reached through
+    # dev tooling (ESLint, typescript-eslint), which reads patterns from our own config files.
+    # Revisit when those tools move to minimatch 11.
+    - GHSA-g3hv-75wg-m249

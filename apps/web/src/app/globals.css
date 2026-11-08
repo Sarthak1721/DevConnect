@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+/*
+  Design tokens. Components use semantic names (bg-canvas, text-muted, border-line)
+  instead of raw colours, so a theme change only touches this file.
+  This is a placeholder palette: the real visual identity is designed in Phase 14.
+*/
+@theme {
+  --color-canvas: #faf9f7;
+  --color-surface: #ffffff;
+  --color-ink: #1c1b19;
+  --color-muted: #6b6760;
+  --color-line: #e5e2dc;
+  --color-accent: #c2410c;
+  --color-success: #15803d;
+  --color-danger: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #121110;
+    --color-surface: #1b1a18;
+    --color-ink: #edebe7;
+    --color-muted: #a29e96;
+    --color-line: #2e2c29;
+    --color-accent: #fb923c;
+    --color-success: #4ade80;
+    --color-danger: #f87171;
+  }
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}

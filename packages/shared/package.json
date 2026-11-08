@@ -1,0 +1,22 @@
+{
+  "name": "@devconnect/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zod schemas and TypeScript types shared by the DevConnect web app and API",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

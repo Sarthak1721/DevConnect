@@ -1,0 +1,8 @@
+# Generated or third-party files: never reformat
+pnpm-lock.yaml
+**/dist
+**/coverage
+apps/web/.next
+apps/web/next-env.d.ts
+# Written and maintained by `next dev`
+apps/web/AGENTS.md
