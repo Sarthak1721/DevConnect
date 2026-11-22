@@ -24,6 +24,26 @@ jobs:
     name: Format, lint, typecheck, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # A throwaway PostgreSQL 18 for the integration tests. GitHub starts it before the steps run and
+    # deletes it afterwards. Same image and credentials as docker-compose.yml; the database is the
+    # test database the integration tests connect to by default.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: devconnect
+          POSTGRES_PASSWORD: devconnect
+          POSTGRES_DB: devconnect_test
+        ports:
+          - 5432:5432
+        # The steps wait until Postgres reports healthy.
+        options: >-
+          --health-cmd "pg_isready -U devconnect -d devconnect_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -49,8 +69,24 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      # Regenerate migrations from src/db/schema. If a new file appears, someone changed the schema
+      # without generating and committing its migration.
+      - name: Check that the migrations match the schema
+        run: |
+          pnpm db:generate
+          git status --porcelain apps/api/src/db/migrations
+          test -z "$(git status --porcelain apps/api/src/db/migrations)"
+
+      - name: Unit tests
         run: pnpm test
+
+      - name: Integration tests (PostgreSQL 18)
+        run: pnpm test:integration
 
       - name: Build
         run: pnpm build
+
+      # Fails on any known vulnerability that isn't reviewed and listed in pnpm-workspace.yaml
+      # (docs/adr/0008). Last, so a new advisory doesn't hide the other results.
+      - name: Audit dependencies
+        run: pnpm audit

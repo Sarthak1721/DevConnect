@@ -6,3 +6,5 @@ apps/web/.next
 apps/web/next-env.d.ts
 # Written and maintained by `next dev`
 apps/web/AGENTS.md
+# Snapshots written by drizzle-kit (`pnpm db:generate`); reformatting them would be noise
+apps/api/src/db/migrations/meta

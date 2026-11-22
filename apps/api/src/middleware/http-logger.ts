@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
 import { pinoHttp } from 'pino-http';
 import { logger } from '../lib/logger';
 
 // Accept a correlation id from an upstream proxy only if it looks like an id.
 // Anything else (spaces, newlines, huge strings) could be used to forge log lines.
 const SAFE_INCOMING_ID = /^[A-Za-z0-9._-]{8,128}$/;
+
+// Inside a mounted router Express shortens req.url ("/api/v1/health/ready" becomes "/ready").
+// originalUrl keeps the full path, which is what a log line should show.
+const fullUrl = (req: IncomingMessage & { originalUrl?: string }) => req.originalUrl ?? req.url;
 
 /**
  * Per-request logging middleware:
@@ -30,8 +35,8 @@ export const httpLogger = pinoHttp({
   },
 
   customSuccessMessage: (req, res, responseTime) =>
-    `${req.method} ${req.url} → ${res.statusCode} (${Math.round(responseTime)} ms)`,
-  customErrorMessage: (req, res) => `${req.method} ${req.url} → ${res.statusCode}`,
+    `${req.method} ${fullUrl(req)} → ${res.statusCode} (${Math.round(responseTime)} ms)`,
+  customErrorMessage: (req, res) => `${req.method} ${fullUrl(req)} → ${res.statusCode}`,
 
   // Keep access logs small and free of personal data: no headers, no bodies, no IP addresses.
   serializers: {

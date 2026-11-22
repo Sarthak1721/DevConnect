@@ -19,11 +19,17 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm --recursive typecheck",
     "test": "pnpm --recursive test",
+    "test:integration": "pnpm --filter @devconnect/api test:integration",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "infra:up": "docker compose up --detach --wait",
     "infra:down": "docker compose down",
     "infra:reset": "docker compose down --volumes",
-    "infra:logs": "docker compose logs --follow"
+    "infra:logs": "docker compose logs --follow",
+    "db:generate": "pnpm --filter @devconnect/api db:generate",
+    "db:migrate": "pnpm --filter @devconnect/api db:migrate",
+    "db:seed": "pnpm --filter @devconnect/api db:seed",
+    "db:seed:large": "pnpm --filter @devconnect/api db:seed:large",
+    "db:psql": "docker compose exec postgres psql -U devconnect -d devconnect"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
