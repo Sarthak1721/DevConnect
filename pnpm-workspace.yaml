@@ -31,3 +31,9 @@ auditConfig:
     # dev tooling (ESLint, typescript-eslint), which reads patterns from our own config files.
     # Revisit when those tools move to minimatch 11.
     - GHSA-g3hv-75wg-m249
+    # esbuild <= 0.24.2: any website can read responses from esbuild's built-in dev server
+    # (`esbuild --serve`). Only reached through drizzle-kit's deprecated @esbuild-kit loader, a
+    # dev-only migration tool that never starts that server. Our own esbuild is 0.28.
+    # Note: pnpm ignores an advisory everywhere, not per path. Revisit when drizzle-kit drops
+    # @esbuild-kit (planned for Drizzle v1).
+    - GHSA-67mh-4wv8-2f99

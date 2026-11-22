@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
+// Unit tests: fast, no database, no network. They live next to the code (src/**/*.test.ts).
+// Integration tests (tests/integration, real Postgres) have their own config:
+// vitest.integration.config.ts.
 export default defineConfig({
   test: {
     environment: 'node',
@@ -12,6 +15,8 @@ export default defineConfig({
       PORT: '4000',
       WEB_ORIGIN: 'http://localhost:3000',
       TRUST_PROXY_HOPS: '0',
+      // Required by the env schema. Unit tests never connect: the pool only connects on a query.
+      DATABASE_URL: 'postgresql://devconnect:devconnect@127.0.0.1:5432/devconnect_test',
     },
   },
 });

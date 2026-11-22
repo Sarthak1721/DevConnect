@@ -2,7 +2,16 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2024"],
-    "types": ["node"]
+    "types": ["node"],
+    // Lets a file import "./x.ts" with its extension, as Node's built-in TypeScript support
+    // requires. Allowed because nothing here is compiled by tsc (noEmit in the base config).
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "vitest.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "vitest.integration.config.ts",
+    "drizzle.config.ts"
+  ]
 }

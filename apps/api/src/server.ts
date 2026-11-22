@@ -1,5 +1,6 @@
 import { createApp } from './app';
 import { env } from './config/env';
+import { closeDatabase, pingDatabase } from './db/client';
 import { logger } from './lib/logger';
 
 const app = createApp();
@@ -17,12 +18,29 @@ const server = app.listen(env.PORT, (error?: Error) => {
     process.exit(1);
   }
   logger.info(`DevConnect API listening on http://localhost:${env.PORT}`);
+  void reportDatabaseStatus();
 });
 
 /**
+ * A friendly heads-up at startup. Not fatal on purpose: in production the database may come back a
+ * moment later, and the readiness endpoint (GET /api/v1/health/ready) reports 503 until it does.
+ */
+async function reportDatabaseStatus(): Promise<void> {
+  try {
+    const latencyMs = await pingDatabase();
+    logger.info(`Database reachable (${latencyMs} ms)`);
+  } catch (error) {
+    logger.warn(
+      { err: error },
+      'Database unreachable. Locally: is Docker running and did you run `pnpm infra:up`?',
+    );
+  }
+}
+
+/**
  * Graceful shutdown. When the platform stops or redeploys us (SIGTERM) or you press Ctrl+C
- * (SIGINT): stop accepting new connections, let in-flight requests finish, then exit.
- * Database and Redis connections will be closed here too once they exist.
+ * (SIGINT): stop accepting new connections, let in-flight requests finish, then close the
+ * database pool (in that order: in-flight requests may still need the database) and exit.
  */
 let shuttingDown = false;
 
@@ -39,7 +57,11 @@ function shutdown(signal: NodeJS.Signals): void {
 
   server.close((error) => {
     if (error) logger.error({ err: error }, 'Error while closing the HTTP server');
-    process.exit(error ? 1 : 0);
+    closeDatabase()
+      .catch((dbError: unknown) => {
+        logger.error({ err: dbError }, 'Error while closing database connections');
+      })
+      .finally(() => process.exit(error ? 1 : 0));
   });
 }
 

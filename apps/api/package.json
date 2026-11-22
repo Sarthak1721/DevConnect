@@ -10,13 +10,20 @@
     "start": "node --env-file-if-exists=.env --enable-source-maps dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "db:seed": "tsx --env-file-if-exists=.env src/db/seed/dev.ts",
+    "db:seed:large": "tsx --env-file-if-exists=.env src/db/seed/large.ts"
   },
   "dependencies": {
     "@devconnect/shared": "workspace:*",
     "cors": "^2.8.6",
+    "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "helmet": "^8.3.0",
+    "pg": "^8.23.1",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "zod": "catalog:"
@@ -25,7 +32,9 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
     "pino-pretty": "^13.2.0",
     "supertest": "^7.3.1",

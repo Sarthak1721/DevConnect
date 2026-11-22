@@ -1,14 +1,15 @@
-import type { ApiSuccess, HealthStatus } from '@devconnect/shared';
+import type { ApiSuccess, HealthStatus, ReadinessStatus } from '@devconnect/shared';
 import { Router } from 'express';
+import { pingDatabase } from '../../db/client';
+import { AppError } from '../../lib/errors';
 
 export const healthRouter = Router();
 
 /**
- * Liveness check: "is the process up and able to answer HTTP?"
+ * Liveness: "is the process up and able to answer HTTP?"
  *
- * It deliberately touches no database. A readiness check (GET /health/ready: "can I serve
- * real traffic?", which also pings Postgres and Redis) arrives with those dependencies.
- * Hosting platforms call this endpoint to decide whether to restart the service.
+ * Deliberately touches no database. If Postgres goes down, restarting the API wouldn't help, so a
+ * platform watching this endpoint shouldn't restart us; it should stop sending traffic (readiness).
  */
 healthRouter.get('/', (_req, res) => {
   const body: ApiSuccess<HealthStatus> = {
@@ -18,6 +19,29 @@ healthRouter.get('/', (_req, res) => {
       uptimeSeconds: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
     },
+  };
+  res.json(body);
+});
+
+/**
+ * Readiness: "can I serve real traffic right now?" It checks the database (Redis joins in a later
+ * phase). Load balancers and deploy pipelines use it to decide whether to send traffic here:
+ * 200 = yes, 503 = not now (try again or route elsewhere).
+ */
+healthRouter.get('/ready', async (_req, res) => {
+  let latencyMs: number;
+  try {
+    latencyMs = await pingDatabase();
+  } catch (error) {
+    throw new AppError(503, 'SERVICE_UNAVAILABLE', 'The API cannot reach its database right now.', {
+      cause: error,
+      details: { database: 'down' },
+    });
+  }
+
+  const body: ApiSuccess<ReadinessStatus> = {
+    success: true,
+    data: { status: 'ready', checks: { database: { status: 'up', latencyMs } } },
   };
   res.json(body);
 });
