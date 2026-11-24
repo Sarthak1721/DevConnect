@@ -42,7 +42,9 @@ export function LoginForm() {
       <TextField
         label="Email"
         type="email"
-        autoComplete="email"
+        // "username" tells password managers this is the account's sign-in name (ours is the
+        // email), so they save and fill the email here rather than the public handle.
+        autoComplete="username"
         error={errors.email?.message}
         {...register('email')}
       />

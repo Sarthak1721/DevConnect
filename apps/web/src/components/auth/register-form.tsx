@@ -53,7 +53,9 @@ export function RegisterForm() {
       />
       <TextField
         label="Username"
-        autoComplete="username"
+        // The public handle (/u/<username>), not what you sign in with: "nickname" keeps password
+        // managers from saving it as the login name.
+        autoComplete="nickname"
         autoCapitalize="none"
         spellCheck={false}
         hint={
@@ -67,7 +69,8 @@ export function RegisterForm() {
       <TextField
         label="Email"
         type="email"
-        autoComplete="email"
+        // The sign-in name: password managers save this one together with the new password.
+        autoComplete="username"
         error={errors.email?.message}
         {...register('email')}
       />
