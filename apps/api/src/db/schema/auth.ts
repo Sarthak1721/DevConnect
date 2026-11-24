@@ -36,6 +36,12 @@ export const refreshTokens = pgTable(
     uniqueIndex('refresh_tokens_token_hash_key').on(t.tokenHash), // lookup on every refresh
     index('refresh_tokens_family_idx').on(t.familyId), // revoke a family
     index('refresh_tokens_user_idx').on(t.userId), // "log out everywhere" + cascades
+    // Every refresh asks "has this token's family been revoked?" (docs/adr/0011). A partial index
+    // holds only the revoked tokens, so the answer is one lookup in a small index instead of a
+    // walk through every token the session ever had (one per refresh, so up to ~2,900 in 30 days).
+    index('refresh_tokens_revoked_family_idx')
+      .on(t.familyId)
+      .where(sql`${t.revokedAt} is not null`),
     check('refresh_tokens_token_hash_format', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
     check(
       'refresh_tokens_expiry_valid',

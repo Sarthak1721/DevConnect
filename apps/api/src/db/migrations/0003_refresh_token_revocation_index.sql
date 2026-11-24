@@ -1,0 +1,1 @@
+CREATE INDEX "refresh_tokens_revoked_family_idx" ON "refresh_tokens" USING btree ("family_id") WHERE "refresh_tokens"."revoked_at" is not null;

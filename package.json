@@ -29,7 +29,8 @@
     "db:migrate": "pnpm --filter @devconnect/api db:migrate",
     "db:seed": "pnpm --filter @devconnect/api db:seed",
     "db:seed:large": "pnpm --filter @devconnect/api db:seed:large",
-    "db:psql": "docker compose exec postgres psql -U devconnect -d devconnect"
+    "db:psql": "docker compose exec postgres psql -U devconnect -d devconnect",
+    "bench:password": "pnpm --filter @devconnect/api bench:password"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -2,6 +2,8 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { closeDatabase, pingDatabase } from './db/client';
 import { logger } from './lib/logger';
+import { closeRedis, connectRedis } from './lib/redis';
+import { warmUpPasswordHashing } from './modules/auth/password';
 
 const app = createApp();
 
@@ -19,6 +21,12 @@ const server = app.listen(env.PORT, (error?: Error) => {
   }
   logger.info(`DevConnect API listening on http://localhost:${env.PORT}`);
   void reportDatabaseStatus();
+  // Connects in the background and logs when it's ready (or that it isn't): see lib/redis.ts.
+  connectRedis();
+  // Prepares the hash that logins with unknown emails are checked against (modules/auth/password.ts).
+  warmUpPasswordHashing().catch((hashError: unknown) => {
+    logger.error({ err: hashError }, 'Argon2 failed: logins will fail until this is fixed');
+  });
 });
 
 /**
@@ -40,7 +48,8 @@ async function reportDatabaseStatus(): Promise<void> {
 /**
  * Graceful shutdown. When the platform stops or redeploys us (SIGTERM) or you press Ctrl+C
  * (SIGINT): stop accepting new connections, let in-flight requests finish, then close the
- * database pool (in that order: in-flight requests may still need the database) and exit.
+ * database pool and the Redis connection (in that order: in-flight requests may still need them)
+ * and exit.
  */
 let shuttingDown = false;
 
@@ -57,9 +66,13 @@ function shutdown(signal: NodeJS.Signals): void {
 
   server.close((error) => {
     if (error) logger.error({ err: error }, 'Error while closing the HTTP server');
-    closeDatabase()
-      .catch((dbError: unknown) => {
-        logger.error({ err: dbError }, 'Error while closing database connections');
+    void Promise.allSettled([closeDatabase(), closeRedis()])
+      .then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            logger.error({ err: result.reason }, 'Error while closing a connection');
+          }
+        }
       })
       .finally(() => process.exit(error ? 1 : 0));
   });

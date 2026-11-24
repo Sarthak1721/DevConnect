@@ -25,9 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # A throwaway PostgreSQL 18 for the integration tests. GitHub starts it before the steps run and
-    # deletes it afterwards. Same image and credentials as docker-compose.yml; the database is the
-    # test database the integration tests connect to by default.
+    # Throwaway PostgreSQL 18 and Redis for the integration tests. GitHub starts them before the
+    # steps run and deletes them afterwards. Same images (and Postgres credentials) as
+    # docker-compose.yml; the integration tests connect to these addresses by default.
     services:
       postgres:
         image: postgres:18-alpine
@@ -37,11 +37,20 @@ jobs:
           POSTGRES_DB: devconnect_test
         ports:
           - 5432:5432
-        # The steps wait until Postgres reports healthy.
+        # The steps wait until each service reports healthy.
         options: >-
           --health-cmd "pg_isready -U devconnect -d devconnect_test"
           --health-interval 5s
           --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
           --health-retries 10
 
     steps:
@@ -80,7 +89,7 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Integration tests (PostgreSQL 18)
+      - name: Integration tests (PostgreSQL 18 + Redis)
         run: pnpm test:integration
 
       - name: Build

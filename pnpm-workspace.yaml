@@ -19,6 +19,9 @@ allowBuilds:
   esbuild: false
   sharp: false
   unrs-resolver: false
+  # argon2 ships prebuilt binaries inside its own package (prebuilds/win32-x64, linux-x64, ...).
+  # Its install script only compiles from C source when no prebuilt binary matches the platform.
+  argon2: false
 
 # Don't install versions published less than 24 hours ago (pnpm's default, stated explicitly).
 # Most malicious releases are caught and pulled within hours.

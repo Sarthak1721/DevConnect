@@ -19,6 +19,8 @@ new ADR that supersedes the old one and update the old one's status.
 | [0008](0008-dependency-security-updates.md)            | Security updates: newest version that is patched and mature  | Accepted |
 | [0009](0009-database-schema-conventions.md)            | Database schema conventions: integrity enforced by Postgres  | Accepted |
 | [0010](0010-counters-with-statement-level-triggers.md) | Denormalized counters maintained by statement-level triggers | Accepted |
+| [0011](0011-refresh-token-rotation.md)                 | Rotating refresh tokens with reuse detection, per session    | Accepted |
+| [0012](0012-fixed-window-login-rate-limiting.md)       | Fixed-window rate limiting in Redis, failing open            | Accepted |
 
 ## Template
 

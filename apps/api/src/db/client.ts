@@ -55,6 +55,12 @@ export const { pool, db } = createDatabase();
 
 export type Database = typeof db;
 
+/** An open transaction: the same query builder as `db`, with every query inside BEGIN … COMMIT. */
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/** Anything that can run queries: the shared `db` or an open transaction. */
+export type Executor = Database | Transaction;
+
 /** Readiness probe: runs a trivial query and returns the round trip in milliseconds. */
 export async function pingDatabase(): Promise<number> {
   const started = performance.now();

@@ -3,7 +3,7 @@
 A developer social and portfolio platform: profiles, verified GitHub projects, posts, follows and a
 personalized feed. Built phase by phase as a production-style full-stack project.
 
-> **Status:** Phase 2 of 19 (database). See the [roadmap](#roadmap).
+> **Status:** Phase 3 of 19 (authentication). See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -23,7 +23,7 @@ apps/
 packages/
   shared/       Zod schemas + TypeScript types used by both apps
 docker/         Init scripts for the local Postgres container
-docs/           database.md (schema, indexes, migrations) and adr/ (Architecture Decision Records)
+docs/           auth.md, api.md, database.md and adr/ (Architecture Decision Records)
 ```
 
 ## Getting started
@@ -61,9 +61,9 @@ pnpm install
 
 ### 3. Create your local environment files
 
-These copies are git-ignored, so they never reach GitHub. If you created `apps/api/.env` before
-Phase 2, copy it again (or add the `DATABASE_URL` line from the example): the API now refuses to
-start without it.
+These copies are git-ignored, so they never reach GitHub. If your `apps/api/.env` is older than
+Phase 3, copy the example again (or add its `REDIS_URL`, `JWT_ACCESS_SECRET`,
+`JWT_ACCESS_TTL_SECONDS` and `REFRESH_TOKEN_TTL_DAYS` lines): the API refuses to start without them.
 
 ```powershell
 # Windows (PowerShell)
@@ -76,6 +76,15 @@ Copy-Item apps\web\.env.example apps\web\.env.local
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
+
+Then give the API its own secret for signing access tokens. Generate 32 random bytes and paste the
+output after `JWT_ACCESS_SECRET=` in `apps/api/.env`:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Every environment (your laptop, CI, production) gets a different secret, and none is ever committed.
 
 ### 4. Start PostgreSQL and Redis, then create the tables
 
@@ -95,7 +104,11 @@ pnpm dev            # API on :4000 and web app on :3000, with hot reload
 
 Open <http://localhost:3000>. A green **API online** badge means the browser reached the API
 through the Next.js proxy. <http://localhost:4000/api/v1/health/ready> shows whether the API can
-reach the database.
+reach the database and Redis.
+
+Create an account at <http://localhost:3000/register>, or sign in with a seeded one
+(`aarav-mehta@example.com`, password `seed-password-for-local-dev`). How sign-in works:
+[docs/auth.md](docs/auth.md).
 
 ## Scripts
 
@@ -110,7 +123,8 @@ Run from the repository root.
 | `pnpm format`           | Format every file with Prettier (`format:check` only reports)             |
 | `pnpm typecheck`        | TypeScript type checking in every package                                 |
 | `pnpm test`             | Unit tests, once (`pnpm --filter @devconnect/api test:watch` to watch)    |
-| `pnpm test:integration` | Integration tests against Postgres (`pnpm infra:up` first)                |
+| `pnpm test:integration` | Integration tests against Postgres + Redis (`pnpm infra:up` first)        |
+| `pnpm bench:password`   | Time Argon2id hashing with the API's real parameters on this machine      |
 | `pnpm audit`            | Check every dependency against published security advisories              |
 | `pnpm infra:up`         | Start Postgres + Redis containers                                         |
 | `pnpm infra:down`       | Stop them (data is kept)                                                  |
@@ -137,8 +151,22 @@ Run from the repository root.
 - **`next dev` offers to upgrade Next.js with a coding agent.** It found a security advisory for the
   installed version. Choose **Skip** (or wait 10 seconds), then upgrade deliberately: see
   [ADR 0008](docs/adr/0008-dependency-security-updates.md).
-- **`Invalid environment configuration` mentioning `DATABASE_URL`.** Your `apps/api/.env` predates
-  Phase 2. Copy `apps/api/.env.example` again, or add its `DATABASE_URL` line.
+- **`Invalid environment configuration` mentioning `DATABASE_URL`, `REDIS_URL` or
+  `JWT_ACCESS_SECRET`.** Your `apps/api/.env` is older than the code. Copy `apps/api/.env.example`
+  again (or add the missing lines), and generate a secret as shown in step 3.
+- **`Redis unreachable: rate limiting is off`.** Redis isn't running: `pnpm infra:up`. The API still
+  works (readiness says `degraded`), but login attempts aren't throttled meanwhile.
+- **`403 FORBIDDEN` when signing in from the browser.** Open the app at exactly
+  `http://localhost:3000`, the `WEB_ORIGIN` in `apps/api/.env`. `http://127.0.0.1:3000` is a
+  different origin to the browser, so the CSRF check refuses it.
+- **`403 FORBIDDEN` ("must come from the DevConnect web app") from curl or Postman.** The auth
+  endpoints that use cookies require an `Origin` header (CSRF protection). Add
+  `-H "Origin: http://localhost:3000"`; see [docs/api.md](docs/api.md).
+- **Signed out after every page reload.** The session cookie only works on `http://localhost:3000`
+  (or HTTPS). Opening the app through your computer's network IP (`http://192.168.…`) makes the
+  browser drop it, because it is a `Secure` cookie.
+- **`429 RATE_LIMITED` while testing logins.** Ten attempts per account per 15 minutes. Wait, or
+  clear your local counters: `docker compose exec redis redis-cli FLUSHDB`.
 - **`Database unreachable` when the API starts, or `connect ECONNREFUSED 127.0.0.1:5432`.** Postgres
   isn't running: start Docker Desktop, then `pnpm infra:up`. The API keeps running, and
   `/api/v1/health/ready` answers 503 until the database is back.
@@ -158,6 +186,8 @@ Run from the repository root.
 
 ## Documentation
 
+- [Authentication](docs/auth.md): tokens, cookies, sessions, passwords, threats and defences.
+- [API reference](docs/api.md): every endpoint, its request, responses and error codes.
 - [Database](docs/database.md): schema, indexes and the queries they serve, migrations, seeds.
 - [Architecture Decision Records](docs/adr/README.md): the reasoning behind each major choice.
 
@@ -165,8 +195,8 @@ Run from the repository root.
 
 - [x] Phase 0: Requirements and architecture
 - [x] Phase 1: Project setup
-- [ ] Phase 2: Database design ← in review
-- [ ] Phase 3: Authentication
+- [x] Phase 2: Database design
+- [ ] Phase 3: Authentication ← in review
 - [ ] Phase 4: User profile
 - [ ] Phase 5: GitHub integration
 - [ ] Phase 6: Posts

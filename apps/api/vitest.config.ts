@@ -15,8 +15,13 @@ export default defineConfig({
       PORT: '4000',
       WEB_ORIGIN: 'http://localhost:3000',
       TRUST_PROXY_HOPS: '0',
-      // Required by the env schema. Unit tests never connect: the pool only connects on a query.
+      // Required by the env schema. Unit tests never connect: the pool only connects on a query,
+      // and nothing calls connectRedis() (Redis commands fail fast, so the rate limiter lets
+      // requests through).
       DATABASE_URL: 'postgresql://devconnect:devconnect@127.0.0.1:5432/devconnect_test',
+      REDIS_URL: 'redis://127.0.0.1:6379/1',
+      // A fixed, public value: fine for tests, never valid anywhere else.
+      JWT_ACCESS_SECRET: 'unit-tests-only-not-a-real-secret-0123456789abcdef',
     },
   },
 });

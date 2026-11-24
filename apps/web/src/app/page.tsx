@@ -1,10 +1,11 @@
 import { ApiStatus } from '@/components/api-status';
+import { HomeActions } from '@/components/home-actions';
 
-// Placeholder home page for Phase 1. The real landing page is built in Phase 14.
+// Placeholder home page. The real landing page is built in Phase 14.
 export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center gap-8 px-6 py-16">
-      <p className="font-mono text-sm text-muted">~/devconnect · phase 1 of 19</p>
+      <p className="font-mono text-sm text-muted">~/devconnect · phase 3 of 19</p>
 
       <div className="space-y-4">
         <h1 className="text-4xl font-semibold tracking-tight">DevConnect</h1>
@@ -13,6 +14,8 @@ export default function HomePage() {
           what they are building.
         </p>
       </div>
+
+      <HomeActions />
 
       <ApiStatus />
 
