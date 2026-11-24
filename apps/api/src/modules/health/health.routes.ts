@@ -2,6 +2,7 @@ import type { ApiSuccess, HealthStatus, ReadinessStatus } from '@devconnect/shar
 import { Router } from 'express';
 import { pingDatabase } from '../../db/client';
 import { AppError } from '../../lib/errors';
+import { pingRedis } from '../../lib/redis';
 
 export const healthRouter = Router();
 
@@ -24,24 +25,33 @@ healthRouter.get('/', (_req, res) => {
 });
 
 /**
- * Readiness: "can I serve real traffic right now?" It checks the database (Redis joins in a later
- * phase). Load balancers and deploy pipelines use it to decide whether to send traffic here:
- * 200 = yes, 503 = not now (try again or route elsewhere).
+ * Readiness: "can I serve real traffic right now?" Load balancers and deploy pipelines use it to
+ * decide whether to send traffic here: 200 = yes, 503 = not now (try again or route elsewhere).
+ *
+ * The database is required (503 without it); Redis is optional (200 "degraded" without it).
  */
 healthRouter.get('/ready', async (_req, res) => {
-  let latencyMs: number;
-  try {
-    latencyMs = await pingDatabase();
-  } catch (error) {
+  // Both checks at once: the endpoint takes as long as the slower one, not the sum of both.
+  const [database, redis] = await Promise.allSettled([pingDatabase(), pingRedis()]);
+
+  if (database.status === 'rejected') {
     throw new AppError(503, 'SERVICE_UNAVAILABLE', 'The API cannot reach its database right now.', {
-      cause: error,
-      details: { database: 'down' },
+      cause: database.reason,
+      details: { database: 'down', redis: redis.status === 'fulfilled' ? 'up' : 'down' },
     });
   }
 
+  const redisCheck =
+    redis.status === 'fulfilled'
+      ? ({ status: 'up', latencyMs: redis.value } as const)
+      : ({ status: 'down' } as const);
+
   const body: ApiSuccess<ReadinessStatus> = {
     success: true,
-    data: { status: 'ready', checks: { database: { status: 'up', latencyMs } } },
+    data: {
+      status: redisCheck.status === 'up' ? 'ready' : 'degraded',
+      checks: { database: { status: 'up', latencyMs: database.value }, redis: redisCheck },
+    },
   };
   res.json(body);
 });

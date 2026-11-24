@@ -69,21 +69,22 @@ erDiagram
 | `post_likes`                             | one row per (user, post)                                | composite primary key: a second like is impossible                          |
 | `comments`                               | comments and one level of replies                       | reply on the same post (composite FK); replies to replies blocked (trigger) |
 | `github_accounts`, `github_repositories` | a linked GitHub account and its repo snapshot (Phase 5) | one GitHub account per user, one user per GitHub account                    |
-| `refresh_tokens`                         | refresh-token state (Phase 3)                           | only SHA-256 hex digests are stored, never raw tokens                       |
+| `refresh_tokens`                         | one row per issued refresh token (ADR 0011)             | only SHA-256 hex digests are stored, never raw tokens                       |
 
 Conventions (ADR 0009): `uuid DEFAULT uuidv7()` keys, `timestamptz(3)` timestamps, `text` + named
 `CHECK` constraints, `ON DELETE CASCADE` on every foreign key.
 
 ## Where each rule is enforced
 
-| Rule                                     | API (Phase 3+)                           | Database                                      |
-| ---------------------------------------- | ---------------------------------------- | --------------------------------------------- |
-| Field formats and lengths                | Zod: friendly, field-level messages      | `CHECK`: the guarantee                        |
-| Unique email / username / like / follow  | Translates 23505 into `EMAIL_TAKEN`, ... | `UNIQUE`, primary keys                        |
-| Ownership ("only the author may edit")   | `WHERE author_id = $me` in the query     | —                                             |
-| Counters                                 | never written by the API                 | statement-level triggers (ADR 0010)           |
-| Cleanup when a user/post is deleted      | —                                        | `ON DELETE CASCADE`                           |
-| Reserved usernames (admin, support, ...) | validation list                          | — (`me` is impossible anyway: 3-char minimum) |
+| Rule                                     | API                                                | Database                                          |
+| ---------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| Field formats and lengths                | Zod (shared with the web forms): friendly messages | `CHECK`: the guarantee                            |
+| Unique email / username / like / follow  | translates 23505 into `EMAIL_TAKEN`, ... (409)     | `UNIQUE`, primary keys                            |
+| Ownership ("only the author may edit")   | `WHERE author_id = $me` in the query               | —                                                 |
+| Counters                                 | never written by the API                           | statement-level triggers (ADR 0010)               |
+| Cleanup when a user/post is deleted      | —                                                  | `ON DELETE CASCADE`                               |
+| Reserved usernames (admin, support, ...) | `RESERVED_USERNAMES` in `packages/shared`          | — (`me` is impossible anyway: 3-char minimum)     |
+| A session is revoked                     | checks the whole family at use time (ADR 0011)     | partial index `refresh_tokens_revoked_family_idx` |
 
 ## Indexes and the queries they serve
 
@@ -92,16 +93,17 @@ posts generated with `pnpm db:seed:large`; the development machine's numbers are
 [Measurements](#measurements). "Buffers" counts the 8 kB pages read: it shows how much work a
 query does, independent of how fast the machine is.
 
-| Query                                                              | Index                           | Plan                                              | Buffers |
-| ------------------------------------------------------------------ | ------------------------------- | ------------------------------------------------- | ------- |
-| Explore, first page (`ORDER BY created_at DESC, id DESC LIMIT 21`) | `posts_created_idx`             | Index Only Scan                                   | 4       |
-| Explore, next page (keyset: `WHERE (created_at, id) < (…)`)        | `posts_created_idx`             | Index Only Scan                                   | 4       |
-| Explore, page 2,000 with `OFFSET 40000`                            | `posts_created_idx`             | Index Only Scan, 40,021 rows read and thrown away | 426     |
-| Profile timeline (`WHERE author_id = …`)                           | `posts_author_created_idx`      | Index Only Scan                                   | 4       |
-| Comment thread (`WHERE post_id = … AND parent_id IS NULL`)         | `comments_post_created_idx`     | Index Scan + filter                               | 4       |
-| Followers list of the most-followed user                           | `follows_followee_created_idx`  | Index Only Scan                                   | 4       |
-| "Which of these 20 posts did I like?"                              | `post_likes_pkey`               | Index Only Scan                                   | 3       |
-| Full-text search (`search_vector @@ websearch_to_tsquery(…)`)      | `posts_search_vector_idx` (GIN) | Bitmap Index Scan                                 | 54      |
+| Query                                                              | Index                                         | Plan                                              | Buffers |
+| ------------------------------------------------------------------ | --------------------------------------------- | ------------------------------------------------- | ------- |
+| Explore, first page (`ORDER BY created_at DESC, id DESC LIMIT 21`) | `posts_created_idx`                           | Index Only Scan                                   | 4       |
+| Explore, next page (keyset: `WHERE (created_at, id) < (…)`)        | `posts_created_idx`                           | Index Only Scan                                   | 4       |
+| Explore, page 2,000 with `OFFSET 40000`                            | `posts_created_idx`                           | Index Only Scan, 40,021 rows read and thrown away | 426     |
+| Profile timeline (`WHERE author_id = …`)                           | `posts_author_created_idx`                    | Index Only Scan                                   | 4       |
+| Comment thread (`WHERE post_id = … AND parent_id IS NULL`)         | `comments_post_created_idx`                   | Index Scan + filter                               | 4       |
+| Followers list of the most-followed user                           | `follows_followee_created_idx`                | Index Only Scan                                   | 4       |
+| "Which of these 20 posts did I like?"                              | `post_likes_pkey`                             | Index Only Scan                                   | 3       |
+| Full-text search (`search_vector @@ websearch_to_tsquery(…)`)      | `posts_search_vector_idx` (GIN)               | Bitmap Index Scan                                 | 54      |
+| "Has this session been revoked?" (every refresh, lesson 4)         | `refresh_tokens_revoked_family_idx` (partial) | Index Only Scan                                   | 2       |
 
 Reproduce any of them with `pnpm db:psql` and `EXPLAIN (ANALYZE, BUFFERS) <query>;`.
 
@@ -138,6 +140,68 @@ column here leads some index. And `comments (post_id, …)` is deliberately not 
 On the generated data, a trigram search for `load-usr-123` used a sequential scan: every generated
 username starts with `load-user-`, so nearly every row is "similar" and reading the whole table is
 cheaper. Indexes pay off for selective conditions. Phase 11 revisits this with realistic names.
+
+### Lesson 4: a partial index for a question about rare rows
+
+Every token refresh asks whether any token of the session has been revoked (ADR 0011):
+
+```sql
+select exists (
+  select 1 from refresh_tokens r where r.family_id = $1 and r.revoked_at is not null
+);
+```
+
+Measured in the verification run (12 runs) on 202,891 tokens: one 30-day session of 2,880 tokens
+(one per 15-minute refresh, none revoked) among 20,000 sessions of 10 tokens, one session in ten
+revoked. The question was asked about the long session:
+
+| Indexes available                                       | Plan the planner chose         | Rows read and thrown away | Buffers | Time         |
+| ------------------------------------------------------- | ------------------------------ | ------------------------- | ------- | ------------ |
+| `refresh_tokens_revoked_family_idx` (only revoked rows) | Index Only Scan (every run)    | 0                         | 2       | ≈ 0.01 ms    |
+| `refresh_tokens_family_idx` only                        | Index Scan + filter (10 of 12) | 2,880                     | 72–73   | 0.37–0.72 ms |
+| `refresh_tokens_family_idx` only                        | Seq Scan (2 of 12)             | 202,891                   | 4,513   | 21.7 ms      |
+
+Two lessons in one table:
+
+1. **A partial index holds only the rows a query asks about** (`WHERE revoked_at IS NOT NULL`), so
+   the answer costs two pages however many tokens the table and the session accumulate. Without it,
+   Postgres has to read every token of the session to prove that none is revoked. Migration `0003`
+   adds it.
+2. **Why the planner sometimes read the whole table.** It estimated 2,800 tokens for this session
+   (right) and 278 revoked among them (wrong). It assumes columns are independent: 10% of all tokens
+   are revoked, so 10% of this session's should be. `EXISTS` stops at the first match, and with 278
+   expected matches a sequential scan "should" find one after reading about 1/279 of the table
+   (estimated cost 25, slightly below the index's). There were none, so it read all 202,891 rows.
+   Which plan wins depends on statistics that `ANALYZE` takes from a random sample and on the
+   table's physical layout, so it can change from one run to the next. The partial index makes the
+   cost small and predictable. (Extended statistics, `CREATE STATISTICS`, are the general tool for
+   telling the planner about correlated columns.)
+
+Reproduce it with `pnpm db:psql` (after `pnpm db:migrate` and `pnpm db:seed`). Everything runs in a
+transaction and is rolled back, so no data is kept:
+
+```sql
+begin;
+select id as uid from users order by created_at limit 1 \gset
+select uuidv7() as fam \gset
+-- one 30-day session: 2,880 tokens, all but the newest rotated, none revoked
+insert into refresh_tokens (user_id, family_id, token_hash, expires_at, family_expires_at, rotated_at)
+select :'uid', :'fam', encode(sha256(('long-' || g)::bytea), 'hex'),
+       now() + interval '7 days', now() + interval '30 days', case when g < 2880 then now() end
+from generate_series(1, 2880) g;
+-- 20,000 other sessions of 10 tokens; every 10th session revoked
+insert into refresh_tokens (user_id, family_id, token_hash, expires_at, family_expires_at, revoked_at)
+select :'uid', f.id, encode(sha256(('other-' || f.n || '-' || t)::bytea), 'hex'),
+       now() + interval '7 days', now() + interval '30 days', case when f.n % 10 = 0 then now() end
+from (select uuidv7() as id, n from generate_series(1, 20000) n) f, generate_series(1, 10) t;
+analyze refresh_tokens;
+explain (analyze, buffers)
+select exists (select 1 from refresh_tokens r where r.family_id = :'fam' and r.revoked_at is not null);
+drop index refresh_tokens_revoked_family_idx; -- only inside this transaction
+explain (analyze, buffers)
+select exists (select 1 from refresh_tokens r where r.family_id = :'fam' and r.revoked_at is not null);
+rollback;
+```
 
 ## Triggers
 
@@ -223,7 +287,10 @@ Postgres restart (cold cache, 99 pages from disk), the keyset query ran warm.
 
 | Metric                                              | Value                     |
 | --------------------------------------------------- | ------------------------- |
-| Integration test suite (49 tests)                   | 10.9 s, 11.1 s (two runs) |
+| Integration test suite (49 tests, Phase 2)          | 10.9 s, 11.1 s (two runs) |
+| Integration test suite (83 tests, Phase 3)          | To be measured            |
+| CI pipeline, Phase 2 (PR #1, GitHub Actions)        | 54 s                      |
+| Revoked-session check on your machine (lesson 4)    | To be measured            |
 | `pnpm db:seed:large --posts 1000000` total time     | To be measured            |
 | Size of `posts` at 1,000,000 posts                  | To be measured            |
 | OFFSET vs keyset time, warm cache, median of 5 runs | To be measured (Phase 9)  |

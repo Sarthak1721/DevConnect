@@ -3,6 +3,7 @@ import { expect } from 'vitest';
 import { db } from '../../src/db/client';
 import { posts, users } from '../../src/db/schema';
 import { findPgError } from '../../src/lib/pg-errors';
+import { redis } from '../../src/lib/redis';
 
 /**
  * Empties every table before each test, so tests can't affect each other.
@@ -11,6 +12,11 @@ import { findPgError } from '../../src/lib/pg-errors';
  */
 export async function resetDatabase(): Promise<void> {
   await db.execute(sql`TRUNCATE users, skills CASCADE`);
+}
+
+/** Empties the test Redis database (rate-limit counters), so no test inherits another's attempts. */
+export async function resetRedis(): Promise<void> {
+  await redis.flushDb();
 }
 
 /**

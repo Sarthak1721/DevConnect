@@ -17,7 +17,7 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, req, res, next) 
     return;
   }
 
-  const { statusCode, body } = toErrorResponse(err, {
+  const { statusCode, body, headers } = toErrorResponse(err, {
     // Set by the http-logger middleware; always a string there.
     requestId: typeof req.id === 'string' ? req.id : undefined,
     exposeDebug: env.NODE_ENV === 'development',
@@ -28,5 +28,6 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, req, res, next) 
     res.err = err instanceof Error ? err : new Error(String(err));
   }
 
+  if (headers) res.set(headers);
   res.status(statusCode).json(body);
 };

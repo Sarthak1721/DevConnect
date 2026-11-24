@@ -10,22 +10,29 @@ export class AppError extends Error {
   readonly statusCode: number;
   readonly code: ErrorCode;
   readonly details: unknown;
+  /** Extra response headers, e.g. Retry-After on a 429 or WWW-Authenticate on a 401. */
+  readonly headers: Record<string, string> | undefined;
 
   constructor(
     statusCode: number,
     code: ErrorCode,
     message: string,
-    options: { details?: unknown; cause?: unknown } = {},
+    options: { details?: unknown; cause?: unknown; headers?: Record<string, string> } = {},
   ) {
     super(message, { cause: options.cause });
     this.name = 'AppError';
     this.statusCode = statusCode;
     this.code = code;
     this.details = options.details;
+    this.headers = options.headers;
   }
 }
 
-export type ErrorResponse = { statusCode: number; body: ApiError };
+export type ErrorResponse = {
+  statusCode: number;
+  body: ApiError;
+  headers?: Record<string, string>;
+};
 
 type ErrorContext = {
   requestId?: string;
@@ -58,10 +65,11 @@ export function toErrorResponse(err: unknown, context: ErrorContext): ErrorRespo
 
   // 1. Errors we threw on purpose.
   if (err instanceof AppError) {
-    return respond(err.statusCode, err.code, err.message, err.details);
+    const response = respond(err.statusCode, err.code, err.message, err.details);
+    return err.headers === undefined ? response : { ...response, headers: err.headers };
   }
 
-  // 2. Input that failed a Zod schema (request validation arrives in Phase 3).
+  // 2. Input that failed a Zod schema.
   if (err instanceof ZodError) {
     const details = err.issues.map((issue) => ({
       path: issue.path.join('.'),

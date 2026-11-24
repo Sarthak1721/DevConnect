@@ -1,10 +1,10 @@
 import { defineConfig } from 'vitest/config';
 // With the file extension: Vite is moving to loading config files with Node's own TypeScript
 // support, which doesn't guess extensions the way a bundler does.
-import { testDatabaseUrl } from './tests/test-database.ts';
+import { testDatabaseUrl, testRedisUrl } from './tests/test-database.ts';
 
-// Integration tests: real Express app + real PostgreSQL 18 (the devconnect_test database).
-// Locally: `pnpm infra:up` first. In CI, Postgres runs as a service container.
+// Integration tests: real Express app + real PostgreSQL 18 (the devconnect_test database) + real
+// Redis (database 1). Locally: `pnpm infra:up` first. In CI, both run as service containers.
 export default defineConfig({
   test: {
     environment: 'node',
@@ -22,6 +22,9 @@ export default defineConfig({
       WEB_ORIGIN: 'http://localhost:3000',
       TRUST_PROXY_HOPS: '0',
       DATABASE_URL: testDatabaseUrl,
+      REDIS_URL: testRedisUrl,
+      // A fixed, public value: fine for tests, never valid anywhere else.
+      JWT_ACCESS_SECRET: 'integration-tests-only-not-a-real-secret-0123456789',
     },
     hookTimeout: 30_000,
   },
